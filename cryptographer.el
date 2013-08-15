@@ -25,6 +25,10 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+
+;!SECTION! Dealing with binary and hexadecimal representation of integers
+;========================================================================
+
 (defun cryptographer/hex-to-binary(hex)
   "Returns a string corresponding to the binary representation of
 the hexadecimal string given as an input.
@@ -56,6 +60,10 @@ Example: (cryptographer/hex-to-binary \"0a 0b 4C\")
             ))
     result))
 
+(defun cryptographer/char-to-hex(x)
+  "Turns a character matching [0-9a-fA-F] into the corresponding
+integer in base 16."
+  (string-to-int (char-to-string x) 16))
 
 
 
@@ -105,7 +113,7 @@ Example: (cryptographer/hamming-weight \"0a 0b 4C\")
 
 (defun cryptographer/apply-hex-operation(hex-operation hex1 hex2)
   "Returns a string corresponding to the hexadecimal
-representation of the result of applying operation on byte-wise
+representation of the result of applying operation byte-wise
 on the hexadecimal numbers represented by the input strings.
 
 If the strings are of different length, the smallest is padded
@@ -146,7 +154,10 @@ Example: (cryptographer/apply-hex-operation logxor \"0a 0b 4C\" \"e266\")"
     result))
 
 
-(defun cryptography/insert-spaces()
+;!SECTION! Modification of the appearance of a string
+;====================================================
+
+(defun cryptographer/insert-spaces()
   (interactive)
   (if (region-active-p)
       (progn
@@ -160,29 +171,8 @@ Example: (cryptographer/apply-hex-operation logxor \"0a 0b 4C\" \"e266\")"
           (selected-frame)))))
 
 
-;; (defun cryptographer/left-shift(hex s)
-;;   "Returns the result of a bit shift of the hexadecimal string
-;; hex by s to the left.
 
-;; Example: (cryptographer/left-shift(\"0010a\" 1))
-;;          002110"
-;;   (let (i result)
-;;     (setq result "")
-;;     (dotimes (i (- (length hex) 1))
-;;       (setq result (concat
-;;                     result
-;;                     (format "%x"
-;;                             (logior
-;;                              (string-to-int (char-to-string (lsh (aref hex i) s)))
-;;                              (string-to-int (char-to-string (lsh (aref hex (+ i 1)) (- 4 s))))
-;;                              )))))
-;;     result))
-
-
-;; (cryptographer/left-shift "0010a" 1)
-
-
-(defun cryptography/C-style-array()
+(defun cryptographer/C-style-array()
   "Inserts spaces, commas and '0x' in the highlighted string to
 make it usable as a C-style array of int8_t definition.
 
@@ -207,4 +197,103 @@ Example: 012345 M-x cryptography/C-style-array
 
 
 
-(cryptographer/hex-to-binary (cryptographer/apply-hex-operation 'logior "0a0b4c" "e286"))
+
+;!SECTION! Rotating bits 
+;=======================
+
+(defun cryptographer/rotateL(shift hex)
+  "Interprets the string hex as a hexadecimal number and returns
+the hexadecimal representation of a bit rotation to the left by
+shift bits.
+
+Examples:
+(cryptographer/rotateL 1 \"0010\")
+\"0020\"
+(cryptographer/rotateL 5 \"700\")
+\"00e\"
+"
+  (let (result i c)
+    (setq result "")
+    (dotimes (i (length hex))
+      (setq result (concat
+                    result
+                    (format
+                     "%x"
+                     (logior
+                      (logand 15 (lsh (cryptographer/char-to-hex (aref hex (mod (+ i 0 (/ shift 4)) (length hex)))) (mod shift 4)))
+                      (logand 15 (lsh (cryptographer/char-to-hex (aref hex (mod (+ i 1 (/ shift 4)) (length hex)))) (- (mod shift 4) 4))))))))
+    result))
+
+
+(defun cryptographer/rotateR(shift hex)
+  "Interprets the string hex as a hexadecimal number and returns
+the hexadecimal representation of a bit rotation to the right by
+shift bits.
+
+Examples:
+(cryptographer/rotateR 1 \"0010\")
+\"0008\"
+(cryptographer/rotateR 5 \"00e0\")
+\"700\"
+"
+  (let (result i c)
+    (setq result "")
+    (dotimes (i (length hex))
+      (setq result (concat
+                    result
+                    (format
+                     "%x"
+                     (logior
+                      (logand 15 (lsh (cryptographer/char-to-hex (aref hex (mod (+ i 0  (/ shift 4)) (length hex)))) (- (mod shift 4))))
+                      (logand 15 (lsh (cryptographer/char-to-hex (aref hex (mod (+ i -1 (/ shift 4)) (length hex)))) (- 4 (mod shift 4)))))))))
+    result))
+
+(cryptographer/rotateL 3 "2220")
+(cryptographer/rotateR 2 "2220")
+
+(defun cryptographer/replace-hex-at-point(func)
+  "Applies the function func to the hexadecimal string at
+point. The string at point is made of all adjacent hexadecimal
+digits and it will be erased and replaced by the result of func."
+  (save-excursion
+    (let (begin end hex)
+      (skip-chars-backward "[0-9a-fA-F]")
+      (setq begin (point))
+      (skip-chars-forward "[0-9a-fA-F]")
+      (setq end (point))
+      (setq hex (buffer-substring-no-properties begin end))
+      (delete-region begin end)
+      (insert (funcall func hex)))))
+
+(defun cryptographer/rotate-left-by-1(hex)
+  "Returns the hexadecimal hex rotated by one bit to the left."
+  (cryptographer/rotateL 1 hex))
+
+(defun cryptographer/rotate-right-by-1(hex)
+  "Returns the hexadecimal hex rotated by one bit to the right."
+  (cryptographer/rotateR 1 hex))
+
+(defun cryptographer/rotate-left-hex-at-point()
+  "Rotates the hexadecimal the cursor is on by a version of it
+rotated one bit to the left."
+  (interactive)
+  (cryptographer/replace-hex-at-point 'cryptographer/rotate-left-by-1))
+
+(defun cryptographer/rotate-right-hex-at-point()
+  "Rotates the hexadecimal the cursor is on by a version of it
+rotated one bit to the left."
+  (interactive)
+  (cryptographer/replace-hex-at-point 'cryptographer/rotate-right-by-1))
+
+
+
+;!SECTION! Keyboard shortcuts
+;============================
+
+
+(global-set-key (kbd "M->") 'cryptographer/rotate-right-hex-at-point)
+(global-set-key (kbd "M-<") 'cryptographer/rotate-left-hex-at-point)
+
+
+
+; (cryptographer/hex-to-binary (cryptographer/apply-hex-operation 'logior "0a0b4c" "e286"))
